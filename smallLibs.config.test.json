@@ -1,0 +1,5 @@
+{
+  "storagePath": "testingLibs/",
+  "addTsconfigPath": true,
+  "nameStyle": "kebab"
+}

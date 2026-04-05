@@ -1,0 +1,3 @@
+-[] agent skills 
+-[] example libs 
+-[] init cmd adds default config
