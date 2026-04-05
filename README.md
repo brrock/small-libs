@@ -1,8 +1,8 @@
 # small-libs
 
 [![Bun](https://img.shields.io/badge/Bun-000000?style=flat&logo=bun)](https://bun.sh)
-[![npm version](https://img.shields.io/npm/v/review-cli?style=flat&color=black)](https://www.xnpmjs.com/package/review-cli)
-[![npm downloads](https://img.shields.io/npm/dm/review-cli?style=flat&color=black)](https://www.xnpmjs.com/package/review-cli)
+[![npm version](https://img.shields.io/npm/v/small-libs?style=flat&color=black)](https://www.xnpmjs.com/package/small-libs)
+[![npm downloads](https://img.shields.io/npm/dm/small-libs?style=flat&color=black)](https://www.xnpmjs.com/package/small-libs)
 The shadcn for small libs. Zero dep. Lightning fast. Bun powered. 8kb cli.
 
 `small-libs` reads a source file, follows its local imports, rewrites linked library imports, and copies everything into named folders under `libs/` or your desired folder. This is PoC, therefore breaking changes are likely.
