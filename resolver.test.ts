@@ -10,6 +10,26 @@ test("resolves remote lib refs from the server root", () => {
   expect(resolved).toBe("http://localhost:3000/testLibs/hmm/index.ts");
 });
 
+test("resolves raw githubusercontent refs from the repo root", () => {
+  const resolved = resolveSourceRef(
+    "testLibs/hmm",
+    "https://raw.githubusercontent.com/acme/my-lib/main/testLibs/test/index.ts",
+  );
+
+  expect(resolved).toBe("https://raw.githubusercontent.com/acme/my-lib/main/testLibs/hmm/index.ts");
+});
+
+test("resolves raw githubusercontent refs/heads paths from the repo root", () => {
+  const resolved = resolveSourceRef(
+    "testLibs/hmm",
+    "https://raw.githubusercontent.com/acme/my-lib/refs/heads/main/testLibs/test/index.ts",
+  );
+
+  expect(resolved).toBe(
+    "https://raw.githubusercontent.com/acme/my-lib/refs/heads/main/testLibs/hmm/index.ts",
+  );
+});
+
 test("keeps file urls intact", () => {
   const fileUrl = pathToFileURL(path.join(import.meta.dir, "testLibs/hmm/index.ts")).toString();
 
