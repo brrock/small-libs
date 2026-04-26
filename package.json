@@ -1,7 +1,9 @@
 {
   "name": "small-libs",
-  "version": "0.1.2",
-  "files": ["dist"],
+  "version": "0.1.3",
+  "files": [
+    "dist"
+  ],
   "bin": {
     "small-libs": "./dist/index.js"
   },
