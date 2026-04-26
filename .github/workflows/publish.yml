@@ -19,17 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write 
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for changelogen to see history
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2 # Updated to v2
         with:
           bun-version: latest
-          
+
       - run: bun install
 
       - name: Setup Git
@@ -39,13 +39,16 @@ jobs:
 
       - name: Publish
         run: |
+          # Priming npm for Trusted Publishing (OIDC)
+          # Even when using Bun, changelogen typically calls npm under the hood for the actual registry upload
+          npm config set //registry.npmjs.org/:_authToken "unused"
+          
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "🚀 Starting Official Release (Bump: ${{ github.event.inputs.bumpType }})..."
-            npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
+            echo "🚀 Starting Official Release..."
+            bunx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
           else
             echo "🐥 Starting Nightly Canary..."
-            # Added --no-progres to keep logs clean
-            npx changelogen@latest --canary --publish --publishTag canary --provenance
+            bunx changelogen@latest --canary --publish --publishTag canary --provenance
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
