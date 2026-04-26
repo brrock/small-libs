@@ -1,9 +1,11 @@
-name: release
+name: publish
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       bumpType:
-        description: 'Version bump type (patch, minor, major)'
+        description: 'Version bump type'
         required: true
         default: 'patch'
         type: choice
@@ -13,7 +15,7 @@ on:
           - major
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -25,19 +27,24 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+          
       - run: bun install
 
-      # Configure git so changelogen can commit/tag
       - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Runs the full release flow: Bump -> Changelog -> Commit -> Tag -> Push -> Publish
-      - name: Release
+      - name: Publish
         run: |
-         echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "🚀 Starting Official Release (Bump: ${{ github.event.inputs.bumpType }})..."
+            npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
+          else
+            echo "🐥 Starting Nightly Canary..."
+            npx changelogen@latest --canary --publish --publishTag canary --provenance
+          fi
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
