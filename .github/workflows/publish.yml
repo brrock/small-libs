@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      id-token: write
+      id-token: write 
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Required for changelogen to see history
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: oven-sh/setup-bun@v1
@@ -31,6 +31,9 @@ jobs:
           bun-version: latest
           
       - run: bun install
+
+      - name: Update NPM
+        run: npm install -g npm@latest
 
       - name: Setup Git
         run: |
@@ -44,6 +47,7 @@ jobs:
             npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
           else
             echo "🐥 Starting Nightly Canary..."
+            # Added --no-progres to keep logs clean
             npx changelogen@latest --canary --publish --publishTag canary --provenance
           fi
         env:
