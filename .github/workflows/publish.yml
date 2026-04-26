@@ -42,17 +42,21 @@ jobs:
 
       - name: Publish
         run: |
-          # The "unused" token is what triggers the OIDC flow in the npm client
+          # Configure npm for OIDC (this is required for the machine handshake)
           npm config set //registry.npmjs.org/:_authToken "unused"
           
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "🚀 Starting Official Release..."
-            # Using bunx for speed/consistency
+            # Let changelogen handle everything for official releases
             bunx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
           else
             echo "🐥 Starting Nightly Canary..."
-            # We add --no-git because Canaries shouldn't create local tags in the CI
-            bunx changelogen@latest --canary --publish --publishTag canary --provenance --no-git
+            # 1. Let changelogen bump version & generate changelog (NO publish)
+            bunx changelogen@latest --canary --no-git
+            
+            # 2. Use the raw npm client for the actual publish
+            # This is more robust for Trusted Publishing
+            npm publish --tag canary --access public --provenance
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
