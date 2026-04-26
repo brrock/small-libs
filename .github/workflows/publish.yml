@@ -21,16 +21,19 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0 # Required for changelogen to see history
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: oven-sh/setup-bun@v2 # Updated to v2
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - run: bun install
+      - name: Install dependencies
+        run: bun install
 
       - name: Setup Git
         run: |
@@ -39,16 +42,17 @@ jobs:
 
       - name: Publish
         run: |
-          # Priming npm for Trusted Publishing (OIDC)
-          # Even when using Bun, changelogen typically calls npm under the hood for the actual registry upload
+          # The "unused" token is what triggers the OIDC flow in the npm client
           npm config set //registry.npmjs.org/:_authToken "unused"
           
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "🚀 Starting Official Release..."
+            # Using bunx for speed/consistency
             bunx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
           else
             echo "🐥 Starting Nightly Canary..."
-            bunx changelogen@latest --canary --publish --publishTag canary --provenance
+            # We add --no-git because Canaries shouldn't create local tags in the CI
+            bunx changelogen@latest --canary --publish --publishTag canary --provenance --no-git
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
