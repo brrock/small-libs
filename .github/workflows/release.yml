@@ -36,6 +36,7 @@ jobs:
       # Runs the full release flow: Bump -> Changelog -> Commit -> Tag -> Push -> Publish
       - name: Release
         run: |
+         echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

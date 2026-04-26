@@ -18,6 +18,9 @@ jobs:
       
       # changelogen --canary creates a version like 0.1.2-canary.timestamp.hash
       - name: Publish Canary
-        run: npx changelogen@latest --canary --publish --publishTag canary
+        run: | 
+          # Create .npmrc to authenticate with the token
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          npx changelogen@latest --canary --publish --publishTag canary
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
