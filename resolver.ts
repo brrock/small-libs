@@ -142,36 +142,421 @@ export function getRefFolderName(ref: string) {
   return getLibName(ref);
 }
 
+type ImportMatch = {
+  start: number;
+  end: number;
+  path: string;
+  dynamic: boolean;
+};
+
+type LibDirective = {
+  ref: string;
+  end: number;
+};
+
+function isIdentifierChar(char: string | undefined) {
+  return !!char && /[A-Za-z0-9_$]/.test(char);
+}
+
+function skipQuotedString(source: string, start: number, quote: string) {
+  let index = start + 1;
+
+  while (index < source.length) {
+    const char = source[index]!;
+
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+
+    if (quote === "`" && char === "$" && source[index + 1] === "{") {
+      index += 2;
+      let depth = 1;
+
+      while (index < source.length && depth > 0) {
+        const nested = source[index]!;
+
+        if (nested === "\\") {
+          index += 2;
+          continue;
+        }
+
+        if (nested === "'" || nested === '"' || nested === "`") {
+          index = skipQuotedString(source, index, nested);
+          continue;
+        }
+
+        if (nested === "{") {
+          depth++;
+        } else if (nested === "}") {
+          depth--;
+        }
+
+        index++;
+      }
+
+      continue;
+    }
+
+    if (char === quote) {
+      return index + 1;
+    }
+
+    index++;
+  }
+
+  return source.length;
+}
+
+function skipWhitespaceAndComments(source: string, start: number) {
+  let index = start;
+
+  while (index < source.length) {
+    const char = source[index]!;
+
+    if (/\s/.test(char)) {
+      index++;
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "/") {
+      index += 2;
+
+      while (index < source.length && source[index] !== "\n") {
+        index++;
+      }
+
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "*") {
+      index += 2;
+
+      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
+        index++;
+      }
+
+      index = Math.min(index + 2, source.length);
+      continue;
+    }
+
+    break;
+  }
+
+  return index;
+}
+
+function readIdentifier(source: string, start: number) {
+  let index = start;
+
+  while (index < source.length && isIdentifierChar(source[index])) {
+    index++;
+  }
+
+  return {
+    value: source.slice(start, index),
+    end: index,
+  };
+}
+
+function readStringLiteral(source: string, start: number) {
+  const quote = source[start];
+
+  if (quote !== "'" && quote !== '"') {
+    return null;
+  }
+
+  let index = start + 1;
+
+  while (index < source.length) {
+    const char = source[index]!;
+
+    if (char === "\\") {
+      index += 2;
+      continue;
+    }
+
+    if (char === quote) {
+      return {
+        value: source.slice(start + 1, index),
+        end: index + 1,
+      };
+    }
+
+    index++;
+  }
+
+  return null;
+}
+
+function readExpressionBoundary(source: string, start: number) {
+  let index = start;
+  let depth = 1;
+
+  while (index < source.length && depth > 0) {
+    const char = source[index]!;
+
+    if (char === "'" || char === '"' || char === "`") {
+      index = skipQuotedString(source, index, char);
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "/") {
+      index = skipWhitespaceAndComments(source, index);
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "*") {
+      index = skipWhitespaceAndComments(source, index);
+      continue;
+    }
+
+    if (char === "(") {
+      depth++;
+    } else if (char === ")") {
+      depth--;
+    }
+
+    index++;
+  }
+
+  return index;
+}
+
+function readImportStatementEnd(source: string, start: number) {
+  let index = start;
+
+  while (index < source.length) {
+    const char = source[index]!;
+
+    if (char === "'" || char === '"' || char === "`") {
+      index = skipQuotedString(source, index, char);
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "/") {
+      index = skipWhitespaceAndComments(source, index);
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "*") {
+      index = skipWhitespaceAndComments(source, index);
+      continue;
+    }
+
+    if (char === ";") {
+      return index + 1;
+    }
+
+    if (char === "\n") {
+      return index;
+    }
+
+    index++;
+  }
+
+  return source.length;
+}
+
+function collectImportMatches(source: string) {
+  const imports: ImportMatch[] = [];
+  const directives: LibDirective[] = [];
+  let index = 0;
+
+  while (index < source.length) {
+    const char = source[index]!;
+
+    if (char === "/" && source[index + 1] === "/") {
+      const commentStart = index;
+      index += 2;
+
+      if (source[index] === "@") {
+        const contentStart = index + 1;
+
+        while (index < source.length && source[index] !== "\n") {
+          index++;
+        }
+
+        directives.push({
+          ref: source.slice(contentStart, index).trim(),
+          end: index,
+        });
+        continue;
+      }
+
+      while (index < source.length && source[index] !== "\n") {
+        index++;
+      }
+
+      if (index === commentStart) {
+        index++;
+      }
+
+      continue;
+    }
+
+    if (char === "/" && source[index + 1] === "*") {
+      index = skipWhitespaceAndComments(source, index);
+      continue;
+    }
+
+    if (char === "'" || char === '"' || char === "`") {
+      index = skipQuotedString(source, index, char);
+      continue;
+    }
+
+    if (!isIdentifierChar(char)) {
+      index++;
+      continue;
+    }
+
+    const ident = readIdentifier(source, index);
+
+    if (
+      ident.value !== "import" ||
+      isIdentifierChar(source[index - 1]) ||
+      source[index - 1] === "." ||
+      source[index - 1] === "'" ||
+      source[index - 1] === '"' ||
+      source[index - 1] === "`"
+    ) {
+      index = ident.end;
+      continue;
+    }
+
+    let next = skipWhitespaceAndComments(source, ident.end);
+
+    if (source[next] === ".") {
+      index = next + 1;
+      continue;
+    }
+
+    if (source[next] === "(") {
+      const argStart = skipWhitespaceAndComments(source, next + 1);
+      const specifier = readStringLiteral(source, argStart);
+      const end = readExpressionBoundary(source, next + 1);
+
+      if (specifier) {
+        imports.push({
+          start: index,
+          end,
+          path: specifier.value,
+          dynamic: true,
+        });
+      }
+
+      index = end;
+      continue;
+    }
+
+    const sideEffectImport = readStringLiteral(source, next);
+
+    if (sideEffectImport) {
+      imports.push({
+        start: index,
+        end: readImportStatementEnd(source, sideEffectImport.end),
+        path: sideEffectImport.value,
+        dynamic: false,
+      });
+      index = sideEffectImport.end;
+      continue;
+    }
+
+    while (next < source.length) {
+      next = skipWhitespaceAndComments(source, next);
+
+      const current = source[next];
+
+      if (!current) {
+        break;
+      }
+
+      if (current === "'" || current === '"' || current === "`") {
+        next = skipQuotedString(source, next, current);
+        continue;
+      }
+
+      if (isIdentifierChar(current)) {
+        const token = readIdentifier(source, next);
+
+        if (token.value === "from") {
+          const specifierStart = skipWhitespaceAndComments(source, token.end);
+          const specifier = readStringLiteral(source, specifierStart);
+
+          if (specifier) {
+            imports.push({
+              start: index,
+              end: readImportStatementEnd(source, specifier.end),
+              path: specifier.value,
+              dynamic: false,
+            });
+            next = specifier.end;
+          }
+
+          break;
+        }
+
+        next = token.end;
+        continue;
+      }
+
+      if (current === ";") {
+        next++;
+        break;
+      }
+
+      next++;
+    }
+
+    index = next;
+  }
+
+  return { imports, directives };
+}
+
+function bindLibDirectives(source: string) {
+  const { imports, directives } = collectImportMatches(source);
+  const staticImports = imports.filter((entry) => !entry.dynamic);
+  const libImports = new Map<number, string>();
+  let importIndex = 0;
+
+  for (const directive of directives) {
+    while (importIndex < staticImports.length && staticImports[importIndex]!.start < directive.end) {
+      importIndex++;
+    }
+
+    const nextImport = staticImports[importIndex];
+
+    if (nextImport) {
+      libImports.set(nextImport.start, directive.ref);
+      importIndex++;
+    }
+  }
+
+  return { imports, libImports };
+}
+
 export function parseDeps(file: string, sourceRef: string) {
   const libDeps: string[] = [];
   const fileDeps: string[] = [];
-  const lines = file.split("\n");
+  const { imports, libImports } = bindLibDirectives(file);
 
-  logger.debug("parseDeps start", { sourceRef, lineCount: lines.length });
+  logger.debug("parseDeps start", { sourceRef, lineCount: file.split("\n").length });
 
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index]!;
+  for (const entry of imports) {
+    const libPath = libImports.get(entry.start);
 
-    if (line.trim().startsWith("//@")) {
-      const importLine = lines[index + 1];
-
-      if (importLine && importLine.trim().startsWith("import ")) {
-        const libPath = line.replace("//@", "").trim();
-        const resolved = resolveSourceRef(libPath, sourceRef);
-        logger.debug("parseDeps found", { libPath, resolved, importLine });
-        libDeps.push(resolved);
-        index++;
-      }
+    if (libPath) {
+      const resolved = resolveSourceRef(libPath, sourceRef);
+      logger.debug("parseDeps found", { libPath, resolved, importPath: entry.path });
+      libDeps.push(resolved);
+      continue;
     }
 
-    if (line.trim().startsWith("import ")) {
-      const match = line.match(/from\s+["']([^"']+)["']/);
-
-      if (match && (match[1]!.startsWith(".") || match[1]!.startsWith("/"))) {
-        const resolved = resolveSourceRef(match[1]!, sourceRef);
-        logger.debug("parseDeps import", { importPath: match[1], resolved });
-        fileDeps.push(resolved);
-      }
+    if (entry.path.startsWith(".") || entry.path.startsWith("/")) {
+      const resolved = resolveSourceRef(entry.path, sourceRef);
+      logger.debug("parseDeps import", { importPath: entry.path, resolved, dynamic: entry.dynamic });
+      fileDeps.push(resolved);
     }
   }
 
@@ -185,38 +570,39 @@ export function rewriteDeps(
   getFolderName: (ref: string) => string,
 ) {
   const neededLibs: string[] = [];
-  const lines = file.split("\n");
-  const resolved: string[] = [];
+  const { imports, libImports } = bindLibDirectives(file);
+  let cursor = 0;
+  let resolved = "";
 
-  logger.debug("rewriteDeps start", { sourceRef, lineCount: lines.length });
+  logger.debug("rewriteDeps start", { sourceRef, lineCount: file.split("\n").length });
 
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index]!;
+  for (const entry of imports) {
+    const libPath = libImports.get(entry.start);
 
-    if (line.trim().startsWith("//@")) {
-      const importLine = lines[index + 1];
-
-      if (importLine && importLine.trim().startsWith("import ")) {
-        const libPath = line.replace("//@", "").trim();
-        const nextRef = resolveSourceRef(libPath, sourceRef);
-        neededLibs.push(nextRef);
-        const folderName = getFolderName(nextRef);
-        const nextImport = importLine.replace(
-          /from\s+["'][^"']+["']/,
-          `from "../${folderName}/index"`,
-        );
-        logger.debug("rewriteDeps update", { libPath, nextRef, folderName, nextImport });
-        resolved.push(nextImport);
-        index++;
-        continue;
-      }
+    if (!libPath || entry.dynamic) {
+      continue;
     }
 
-    resolved.push(line);
+    resolved += file.slice(cursor, entry.start);
+
+    const nextRef = resolveSourceRef(libPath, sourceRef);
+    neededLibs.push(nextRef);
+    const folderName = getFolderName(nextRef);
+    const originalImport = file.slice(entry.start, entry.end);
+    const nextImport = originalImport.replace(
+      /from\s+["'][^"']+["']/s,
+      `from "../${folderName}/index"`,
+    );
+
+    logger.debug("rewriteDeps update", { libPath, nextRef, folderName, nextImport });
+    resolved += nextImport;
+    cursor = entry.end;
   }
 
+  resolved += file.slice(cursor);
+
   logger.debug("rewriteDeps done", { sourceRef, neededLibs });
-  return { neededLibs, file: resolved.join("\n") };
+  return { neededLibs, file: resolved };
 }
 
 export default rewriteDeps;

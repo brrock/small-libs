@@ -252,8 +252,8 @@ export async function runCli(argv = process.argv.slice(2)) {
   const sourceRef = resolveSourceRef(fileUrl, process.cwd());
   const refToFolder = new Map<string, string>();
   const usedFolders = new Set<string>();
-  const processedLibs = new Set<string>();
-  const processedFiles = new Set<string>();
+  const libPromises = new Map<string, Promise<string>>();
+  const filePromises = new Map<string, Promise<void>>();
 
   logger.debug("sourceRef", sourceRef);
 
@@ -296,85 +296,99 @@ export async function runCli(argv = process.argv.slice(2)) {
   }
 
   async function processLib(ref: string) {
-    if (processedLibs.has(ref)) {
+    const existing = libPromises.get(ref);
+
+    if (existing) {
       logger.debug("processLib cached", ref);
-      return refToFolder.get(ref) ?? getNameFallback(ref);
+      return existing;
     }
 
-    processedLibs.add(ref);
-    logger.debug("processLib start", ref);
+    const promise = (async () => {
+      logger.debug("processLib start", ref);
 
-    const source = await loadSource(ref);
-    const metadata = getMetadata(source, config.nameStyle, getNameFallback(ref));
-    const folderName = getFolderName(ref, metadata.name || getNameFallback(ref));
-    const deps = parseDeps(source, ref);
+      const source = await loadSource(ref);
+      const metadata = getMetadata(source, config.nameStyle, getNameFallback(ref));
+      const folderName = getFolderName(ref, metadata.name || getNameFallback(ref));
+      const deps = parseDeps(source, ref);
 
-    logger.debug("processLib deps", { ref, folderName, deps });
+      logger.debug("processLib deps", { ref, folderName, deps });
 
-    for (const dep of deps.libDeps) {
-      logger.debug("processLib child lib", { ref, dep });
-      await processLib(dep);
-    }
+      await Promise.all([
+        ...deps.libDeps.map((dep) => {
+          logger.debug("processLib child lib", { ref, dep });
+          return processLib(dep);
+        }),
+        ...deps.fileDeps.map((dep) => {
+          logger.debug("processLib child file", { ref, dep, folderName });
+          return processFile(dep, folderName);
+        }),
+      ]);
 
-    for (const dep of deps.fileDeps) {
-      logger.debug("processLib child file", { ref, dep, folderName });
-      await processFile(dep, folderName);
-    }
+      const resolved = resolveDeps(source, ref, (depRef) => {
+        const depFolder = refToFolder.get(depRef);
 
-    const resolved = resolveDeps(source, ref, (depRef) => {
-      const depFolder = refToFolder.get(depRef);
+        if (!depFolder) {
+          throw new Error(`Missing folder name for ${depRef}`);
+        }
 
-      if (!depFolder) {
-        throw new Error(`Missing folder name for ${depRef}`);
+        return depFolder;
+      });
+
+      if (config.addTsconfigPath) {
+        logger.debug("addTsconfigPath", { folderName, storagePath: config.storagePath });
+        addTsconfigPath(folderName, config.storagePath);
       }
 
-      return depFolder;
-    });
+      copy(resolved.file, folderName, config.storagePath, "index.ts");
+      logger.debug("processLib written", { ref, folderName });
+      return folderName;
+    })();
 
-    if (config.addTsconfigPath) {
-      logger.debug("addTsconfigPath", { folderName, storagePath: config.storagePath });
-      addTsconfigPath(folderName, config.storagePath);
-    }
-
-    copy(resolved.file, folderName, config.storagePath, "index.ts");
-    logger.debug("processLib written", { ref, folderName });
-    return folderName;
+    libPromises.set(ref, promise);
+    return promise;
   }
 
   async function processFile(ref: string, folderName: string) {
-    if (processedFiles.has(ref)) {
+    const existing = filePromises.get(ref);
+
+    if (existing) {
       logger.debug("processFile cached", { ref, folderName });
-      return;
+      return existing;
     }
 
-    processedFiles.add(ref);
-    logger.debug("processFile start", { ref, folderName });
+    const promise = (async () => {
+      logger.debug("processFile start", { ref, folderName });
 
-    const source = await loadSource(ref);
-    const deps = parseDeps(source, ref);
+      const source = await loadSource(ref);
+      const deps = parseDeps(source, ref);
 
-    for (const dep of deps.libDeps) {
-      logger.debug("processFile child lib", { ref, dep });
-      await processLib(dep);
-    }
+      await Promise.all([
+        ...deps.libDeps.map((dep) => {
+          logger.debug("processFile child lib", { ref, dep });
+          return processLib(dep);
+        }),
+        ...deps.fileDeps.map((dep) => {
+          logger.debug("processFile child file", { ref, dep, folderName });
+          return processFile(dep, folderName);
+        }),
+      ]);
 
-    for (const dep of deps.fileDeps) {
-      logger.debug("processFile child file", { ref, dep, folderName });
-      await processFile(dep, folderName);
-    }
+      const resolved = resolveDeps(source, ref, (depRef) => {
+        const depFolder = refToFolder.get(depRef);
 
-    const resolved = resolveDeps(source, ref, (depRef) => {
-      const depFolder = refToFolder.get(depRef);
+        if (!depFolder) {
+          throw new Error(`Missing folder name for ${depRef}`);
+        }
 
-      if (!depFolder) {
-        throw new Error(`Missing folder name for ${depRef}`);
-      }
+        return depFolder;
+      });
 
-      return depFolder;
-    });
+      copy(resolved.file, folderName, config.storagePath, getFileName(ref));
+      logger.debug("processFile written", { ref, folderName, fileName: getFileName(ref) });
+    })();
 
-    copy(resolved.file, folderName, config.storagePath, getFileName(ref));
-    logger.debug("processFile written", { ref, folderName, fileName: getFileName(ref) });
+    filePromises.set(ref, promise);
+    return promise;
   }
 
   let installedFolder: string;

@@ -61,3 +61,36 @@ test("rewrites lib imports to installed folders", () => {
   expect(rewritten.file).toContain('import { subtract } from "../hmm/index";');
   expect(rewritten.file).toContain('import hello from "./hello";');
 });
+
+test("parses multiline imports and dynamic imports while ignoring import-like strings", () => {
+  const source = `
+const importText = "import fake from './nope'";
+const loader = "from './still-nope'";
+//@testLibs/commander
+import {
+  createCommander,
+} from "../commander";
+const helpModule = await import("./help");
+const ignored = import.meta.main;
+`;
+  const deps = parseDeps(source, path.join(import.meta.dir, "testLibs/cli/index.ts"));
+
+  expect(deps.libDeps).toContain(path.join(import.meta.dir, "testLibs/commander/index.ts"));
+  expect(deps.fileDeps).toContain(path.join(import.meta.dir, "testLibs/cli/help.ts"));
+  expect(deps.fileDeps).not.toContain(path.join(import.meta.dir, "testLibs/cli/nope.ts"));
+});
+
+test("rewrites multiline lib imports to installed folders", () => {
+  const source = `
+//@testLibs/logger
+import {
+  createLogger,
+} from "../logger";
+`;
+  const rewritten = rewriteDeps(source, path.join(import.meta.dir, "testLibs/cli/index.ts"), (ref) =>
+    path.basename(path.dirname(ref)),
+  );
+
+  expect(rewritten.file).toContain('from "../logger/index";');
+  expect(rewritten.neededLibs).toContain(path.join(import.meta.dir, "testLibs/logger/index.ts"));
+});
