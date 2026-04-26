@@ -32,9 +32,6 @@ jobs:
           
       - run: bun install
 
-      - name: Update NPM
-        run: npm install -g npm@latest
-
       - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
