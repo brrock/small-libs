@@ -1,0 +1,42 @@
+name: release
+on:
+  workflow_dispatch:
+    inputs:
+      bumpType:
+        description: 'Version bump type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: oven-sh/setup-bun@v1
+      - run: bun install
+
+      # Configure git so changelogen can commit/tag
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Runs the full release flow: Bump -> Changelog -> Commit -> Tag -> Push -> Publish
+      - name: Release
+        run: |
+          npx changelogen@latest --${{ github.event.inputs.bumpType }} --release --push --publish --provenance
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
