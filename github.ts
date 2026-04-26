@@ -23,5 +23,11 @@ type RepoData = {
 
 export function getRepoData(repo: string): Promise<RepoData> {
     const url = "https://ungh.cc/" + repo;
-    return fetch(url).then(res => res.json()) as Promise<RepoData>;
+    return fetch(url).then(async (res) => {
+        if (!res.ok) {
+            throw new Error(`Unable to load repo metadata for ${repo}: ${res.status} ${res.statusText}`);
+        }
+
+        return res.json();
+    }) as Promise<RepoData>;
 }

@@ -28,6 +28,24 @@ function normalizeLocalRef(ref: string) {
   return `${ref}.ts`;
 }
 
+function getRemoteRootPrefix(baseRef: string) {
+  const baseUrl = new URL(baseRef);
+
+  if (baseUrl.hostname === "raw.githubusercontent.com") {
+    const segments = baseUrl.pathname.split("/").filter(Boolean);
+
+    if (segments.length >= 5 && segments[2] === "refs") {
+      return `/${segments.slice(0, 5).join("/")}/`;
+    }
+
+    if (segments.length >= 3) {
+      return `/${segments.slice(0, 3).join("/")}/`;
+    }
+  }
+
+  return "/";
+}
+
 export function resolveSourceRef(ref: string, baseRef: string) {
   logger.debug("resolveSourceRef", { ref, baseRef });
 
@@ -41,16 +59,18 @@ export function resolveSourceRef(ref: string, baseRef: string) {
       ref.startsWith("./") || ref.startsWith("../") || isAbsoluteLocal(ref)
         ? normalizeLocalRef(ref)
         : `${ref.replace(/\/+$/, "")}/index.ts`;
+    const rootPrefix = getRemoteRootPrefix(baseRef);
     const resolved =
       ref.startsWith("./") || ref.startsWith("../") || isAbsoluteLocal(ref)
         ? new URL(nextRef, baseRef).toString()
-        : new URL(`/${nextRef.replace(/^\/+/, "")}`, baseRef).toString();
+        : new URL(`${rootPrefix}${nextRef.replace(/^\/+/, "")}`, baseRef).toString();
     logger.debug("resolveSourceRef remote base", resolved);
     return resolved;
   }
 
   if (ref.startsWith("./") || ref.startsWith("../")) {
-    const resolved = path.resolve(path.dirname(baseRef), normalizeLocalRef(ref));
+    const baseDir = hasExtension(baseRef) ? path.dirname(baseRef) : baseRef;
+    const resolved = path.resolve(baseDir, normalizeLocalRef(ref));
     logger.debug("resolveSourceRef relative", resolved);
     return resolved;
   }
