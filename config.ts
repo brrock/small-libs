@@ -23,11 +23,17 @@ export function resolveConfig(): Config {
   }
   const configPath = join(process.cwd(), configFileName);
   logger.debug("Looking for config at:", configPath);
+  if (!existsSync(configPath)) {
+    logger.debug("Config file not found. Using defaults.");
+    return config;
+  }
+
   try {
     config = JSON.parse(readFileSync(configPath, "utf-8")) as Config;
-  } catch {
-    // File not found or invalid JSON, use default config
-    config = defaultConfig;
+  } catch (error) {
+    throw new Error(
+      `Failed to parse config at ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   logger.debug("config", config);

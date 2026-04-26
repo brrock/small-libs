@@ -1,19 +1,31 @@
-import { warn, log, error } from "console";
+import { error, log, warn } from "console";
+
+function writeWithLabel(writer: (...args: any[]) => void, label: string, args: any[]) {
+  const prefix = label ? `[small-libs] ${label}` : "[small-libs]";
+  writer(prefix, ...args);
+}
 
 const logger = {
   log(...args: any[]) {
-    log(...args);
+    writeWithLabel(log, "", args);
+  },
+  info(...args: any[]) {
+    writeWithLabel(log, "", args);
+  },
+  success(...args: any[]) {
+    writeWithLabel(log, "success", args);
   },
   warn(...args: any[]) {
-    warn(...args);
+    writeWithLabel(warn, "warn", args);
   },
   error(...args: any[]) {
-    error(...args);
+    writeWithLabel(error, "error", args);
   },
   debug(...args: any[]) {
     if (process.env.DEBUG) {
-      log("[DEBUG]:", ...args);
+      writeWithLabel(log, "debug", args);
     }
   },
 };
+
 export default logger;
