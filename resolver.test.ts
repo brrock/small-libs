@@ -38,6 +38,12 @@ test("keeps file urls intact", () => {
   );
 });
 
+test("resolves relative refs from a local directory base", () => {
+  const resolved = resolveSourceRef("./testLibs/hmm/index", import.meta.dir);
+
+  expect(resolved).toBe(path.join(import.meta.dir, "testLibs/hmm/index.ts"));
+});
+
 test("parses both lib and file deps", () => {
   const file = readFileSync(path.join(import.meta.dir, "testLibs/test/index.ts"), "utf-8");
   const deps = parseDeps(file, path.join(import.meta.dir, "testLibs/test/index.ts"));

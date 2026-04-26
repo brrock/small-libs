@@ -34,7 +34,11 @@ let repoData
 if (fileUrl.startsWith("https://raw.githubusercontent.com/")) {
   const {repo} = getRepoUrl(fileUrl);
   logger.debug("repo", repo);
-   repoData = await getRepoData(repo);
+  try {
+    repoData = await getRepoData(repo);
+  } catch (error) {
+    logger.warn("Unable to fetch GitHub metadata for", repo, error);
+  }
 }
 const sourceRef = resolveSourceRef(fileUrl, process.cwd());
 const refToFolder = new Map<string, string>();

@@ -73,6 +73,12 @@ import { subtract } from "../hmm";
 import hello from "./hello";
 ```
 
+Additional example fixture libs are available under `testLibs/`:
+
+- `testLibs/logger` - tiny scoped logger
+- `testLibs/commander` - mini command parser inspired by commander
+- `testLibs/cli` - command-style CLI app that depends on both via `//@...` markers
+
 ## Output
 
 The generated folder ends up at `libs/<name>/index.ts` by default, with any local helper files copied beside it.

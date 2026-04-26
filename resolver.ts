@@ -69,7 +69,8 @@ export function resolveSourceRef(ref: string, baseRef: string) {
   }
 
   if (ref.startsWith("./") || ref.startsWith("../")) {
-    const resolved = path.resolve(path.dirname(baseRef), normalizeLocalRef(ref));
+    const baseDir = hasExtension(baseRef) ? path.dirname(baseRef) : baseRef;
+    const resolved = path.resolve(baseDir, normalizeLocalRef(ref));
     logger.debug("resolveSourceRef relative", resolved);
     return resolved;
   }
